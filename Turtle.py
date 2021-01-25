@@ -3,6 +3,56 @@ import re
 import pathlib
 import pickle
 import pathlib
+import glob
+
+class LineReader:
+    def __init__(self, fname=None, parms="rt"):
+        self.eof = False
+        if fname is not None:
+            self.open(fname, parms)
+
+    def open(self, fname, perms="rt"):
+        self.fname = fname
+        self.perms = perms
+        self.fl = open(self.fname, self.perms)
+        self.eof = False
+
+    def close(self):
+        self.fl.close()
+
+    def reset(self):
+        self.close()
+        self.open(self.fname, self.perms)
+
+    def readline(self):
+        res = self.fl.readline()
+        if res == '':
+            self.eof = True
+            return None
+        return res.strip()
+
+    def readlines(self, n=-1):
+        if self.eof:
+            return []
+        if n == -1:
+            return list(map(lambda x: x.strip(), self.fl))
+        else:
+            res = []
+            line = None
+            i=0
+            while True:
+                i += 1
+                if i > n:
+                    return res;
+                line = self.fl.readline()
+                if line == '':
+                    self.e
+                    return res;
+                res.append(line.strip())
+            return res
+
+    def iseof(self):
+        return self.eof
 
 class Job:
     def __init__(self, progress_file_name: str):
@@ -46,7 +96,7 @@ class ResultStore:
     def mkdir(self, path):
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
     def mk_path(self, fname:str):
-        pre_path = self.chop_pre((fname + self.filler)[0:self.size_pre])
+        pre_path = self.ch
         return self.root + os.path.sep + pre_path + os.path.sep + fname
     def dump(self, filename:str, obj):
         path = self.mk_path(filename)
@@ -57,3 +107,11 @@ class ResultStore:
     def load(self, filename:str):
         with open(self.mk_path(filename), "rb") as f:
            return pickle.load(f)
+
+
+class Find:
+    def __init__(self):
+        pass
+
+    def ex(self, pattern, files=True, dirs=True, recursive=True):
+        return glob.glob(pattern, recursive=recursive)

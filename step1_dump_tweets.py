@@ -3,8 +3,8 @@ from yaml import load, dump, Loader, Dumper
 import tweepy
 import time
 from tweepy.error import TweepError
-from Turtle import Job, ResultStore
-    
+from Turtle import Job, ResultStore, LineReader
+
 api_key = None
 api_secret_key = None
 with open('creds.yaml', 'r') as f:
@@ -12,7 +12,7 @@ with open('creds.yaml', 'r') as f:
     api_key = creds['api_key']
     api_secret_key = creds['api_secret_key']
 
-    
+
 class Step1DumpTweets:
     def __init__(self, api_key, api_secret_key, progress_file, tid_file, dumpdir):
         self.api_key=api_key
@@ -25,34 +25,45 @@ class Step1DumpTweets:
         self.rs = ResultStore(dumpdir, 2, 2)
         self.tj = Job(progress_file)
 
+    def get_next_tids(self, linereader, n):
+        res = []
+        while True:
+            ids = linereader.readlines(n -len(res))
+            for tid in ids:
+                if not self.tj.is_done(tid):
+                    res.append(tid)
+                else:
+                    print('already have', tid)
+            if linereader.iseof():
+                break
+            if len(res) == n:
+                break
+        return list(map(lambda x: int(x), res))
+
     def ex(self):
-        i = 0
-        with open(self.tid_file, 'r') as f:
-            line = f.readline().strip() # get rid of header
-            while True:
-                line = f.readline().strip()
-                if not line:
-                    break
-                i += 1
-                tid = line.split('\t')[0]
-                try:
-                    if not self.tj.is_done(str(tid)):
-                        while True:
-                            try:
-                                tweet = self.api.get_status(str(tid))
-                                self.rs.dump(tid,tweet)
-                                self.tj.add_done(str(tid))
-                                print(i, '\t', tid, '\t', tweet.text)
-                                print()
-                                break
-                            except tweepy.RateLimitError:
-                                print("sleeping due to rate limit")
-                                time.sleep(15*60)
-                                print("done sleeping")
-                except TweepError:
-                    print('error ', tid, 'not found')
-                    print()
-                    self.tj.add_done(str(tid))
+        lr = LineReader(self.tid_file, 'rt')
+        while True:
+            i = 0
+            ids = self.get_next_tids(lr, 100)
+            print('got next', len(ids))
+            try:
+                while True:
+                    try:
+                        tweets = self.api.statuses_lookup(ids)
+                        for j in range(len(tweets)):
+                            self.rs.dump(str(ids[j]),tweets[j])
+                            self.tj.add_done(str(ids[j]))
+                            break
+                    except tweepy.RateLimitError:
+                       print("sleeping due to rate limit")
+                       time.sleep(15*60)
+                       print("done sleeping")
+            except TweepError:
+                print('error ', tid, 'not found')
+                print()
+                self.tj.add_done(str(tid))
+        lr.close()
+        self.tj.close()
 
 if __name__ == '__main__':
     s1 = Step1DumpTweets(api_key, api_secret_key, 'data/j1.txt', 'data/smm4h/remtids.tsv', 'data/tweetdump')
